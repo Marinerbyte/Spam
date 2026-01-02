@@ -7,119 +7,132 @@ HTML_PAGE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>TITAN TERMINAL v2.0</title>
+    <title>TITAN DEBUG TERMINAL</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        :root { --green: #00ff41; --cyan: #00f3ff; --red: #ff003c; --bg: #050505; }
-        body { background: var(--bg); color: var(--cyan); font-family: 'Courier New', monospace; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        :root { --green: #00ff41; --cyan: #00f3ff; --red: #ff003c; --bg: #020202; }
+        body { background: var(--bg); color: var(--cyan); font-family: 'Consolas', monospace; margin: 0; height: 100vh; display: flex; flex-direction: column; }
         
-        /* Header */
-        .header { background: #111; padding: 10px; border-bottom: 2px solid var(--cyan); text-align: center; letter-spacing: 5px; font-weight: bold; }
+        .header { background: #111; padding: 10px; border-bottom: 2px solid var(--cyan); text-align: center; font-weight: bold; font-size: 14px; }
 
-        /* Main Container */
-        .container { display: flex; flex: 1; flex-direction: row; }
-        @media (max-width: 768px) { .container { flex-direction: column; } }
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Control Panel */
+        .controls { width: 300px; padding: 15px; background: #080808; border-right: 1px solid #222; overflow-y: auto; }
+        input { width: 100%; padding: 10px; margin: 5px 0 15px 0; background: #000; border: 1px solid #333; color: var(--cyan); font-size: 12px; }
+        button { width: 100%; padding: 12px; background: var(--cyan); color: #000; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { opacity: 0.8; box-shadow: 0 0 15px var(--cyan); }
 
-        /* Left Control Panel */
-        .controls { width: 350px; padding: 20px; border-right: 1px solid #222; background: #080808; }
-        input { width: 100%; padding: 10px; margin: 5px 0 15px 0; background: #000; border: 1px solid #333; color: var(--cyan); }
-        button { width: 100%; padding: 15px; background: transparent; border: 1px solid var(--cyan); color: var(--cyan); cursor: pointer; font-weight: bold; }
-        button:hover { background: var(--cyan); color: #000; }
-
-        /* Right Terminal Panel */
-        .terminal { flex: 1; background: #000; padding: 15px; overflow-y: auto; font-size: 13px; color: var(--green); border-left: 1px solid #222; position: relative; }
-        .terminal::-webkit-scrollbar { width: 5px; }
-        .terminal::-webkit-scrollbar-thumb { background: #222; }
-        .line { margin-bottom: 5px; border-bottom: 1px solid #0a0a0a; padding-bottom: 2px; }
-        .out { color: var(--cyan); }
-        .in { color: var(--green); }
-        .err { color: var(--red); }
-        .sys { color: #888; }
+        /* Debug Terminal */
+        .terminal-container { flex: 1; display: flex; flex-direction: column; background: #000; }
+        .terminal { flex: 1; overflow-y: scroll; padding: 10px; font-size: 12px; line-height: 1.5; scroll-behavior: smooth; }
+        
+        /* Message Types */
+        .line { margin-bottom: 8px; word-break: break-all; border-left: 3px solid #333; padding-left: 8px; }
+        .in { color: var(--green); border-color: var(--green); } /* Incoming Payloads */
+        .out { color: var(--cyan); border-color: var(--cyan); } /* Outgoing Payloads */
+        .err { color: var(--red); border-color: var(--red); }
+        .sys { color: #888; border-color: #444; }
+        
+        .timestamp { color: #555; font-size: 10px; margin-right: 5px; }
+        
+        /* Custom Scrollbar */
+        .terminal::-webkit-scrollbar { width: 8px; }
+        .terminal::-webkit-scrollbar-track { background: #050505; }
+        .terminal::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
+        .terminal::-webkit-scrollbar-thumb:hover { background: #333; }
     </style>
 </head>
 <body>
-    <div class="header">TITAN_STABILITY_TERMINAL_v2.0</div>
+    <div class="header">TITAN_DEBUG_TERMINAL_v3.1 [LOGGING_ENABLED]</div>
     
-    <div class="container">
+    <div class="main-layout">
         <div class="controls">
-            <label>BOT AUTH</label>
+            <label>BOT CREDENTIALS</label>
             <input type="text" id="user" placeholder="Username">
             <input type="password" id="pass" placeholder="Password">
             
-            <label>TARGETING</label>
+            <label>TEST TARGET</label>
             <input type="text" id="room" placeholder="Room Name">
             <input type="text" id="target" placeholder="Target ID">
             
-            <button onclick="connect()">INITIALIZE SYSTEM</button>
-            <p style="font-size: 10px; margin-top: 20px; color: #444;">* Terminal will log all WebSocket payloads.</p>
+            <button onclick="initBot()">START DEBUGGER</button>
+            <button onclick="clearTerminal()" style="margin-top:10px; background:#333; color:#fff;">CLEAR LOGS</button>
         </div>
 
-        <div id="terminal" class="terminal">
-            <div class="line sys">Waiting for connection... [SYSTEM IDLE]</div>
+        <div class="terminal-container">
+            <div id="terminal" class="terminal">
+                <div class="line sys">Initializing Debug Environment... Waiting for user.</div>
+            </div>
         </div>
     </div>
 
     <script>
         let ws;
-        function term(msg, type='sys') {
-            const t = document.getElementById('terminal');
-            const time = new Date().toLocaleTimeString().split(' ')[0];
-            t.innerHTML += `<div class="line ${type}">[${time}] ${msg}</div>`;
-            t.scrollTop = t.scrollHeight;
+        const terminal = document.getElementById('terminal');
+
+        function log(msg, type='sys') {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `line ${type}`;
+            div.innerHTML = `<span class="timestamp">[${time}]</span><b>${type.toUpperCase()}:</b> ${msg}`;
+            terminal.appendChild(div);
+            
+            // Auto-scroll logic
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
-        function connect() {
+        function clearTerminal() { terminal.innerHTML = '<div class="line sys">Terminal cleared.</div>'; }
+
+        function initBot() {
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
             const r = document.getElementById('room').value;
             const t = document.getElementById('target').value;
 
-            if(!u || !p || !t) { term("ERROR: Incomplete credentials", "err"); return; }
+            if(!u || !p) { log("Error: Credentials missing", "err"); return; }
 
             ws = new WebSocket("wss://chatp.net:5333/server");
 
             ws.onopen = () => {
-                term("WS_CONNECTED: Establishing handshake...", "sys");
-                const loginData = {handler:"login", id: Math.random(), username: u, password: p};
-                term("OUT >> " + JSON.stringify(loginData), "out");
-                ws.send(JSON.stringify(loginData));
+                log("Connection Established. Sending Login Packet...", "sys");
+                const loginPacket = {handler:"login", id: Math.random(), username: u, password: p};
+                ws.send(JSON.stringify(loginPacket));
+                log(JSON.stringify(loginPacket), "out");
             };
 
             ws.onmessage = (e) => {
-                term("IN << " + e.data, "in");
+                // LOG EVERY INCOMING PAYLOAD
+                log(e.data, "in");
+
                 const data = JSON.parse(e.data);
 
+                // Handle Login
                 if(data.handler === "login_event" && data.type === "success") {
-                    term("LOGIN_SUCCESS: Joining target room...", "sys");
+                    log("Login Verified. Joining Room: " + r, "sys");
                     ws.send(JSON.stringify({handler:"room_join", id: Math.random(), name: r}));
                 }
 
+                // Auto-Fire Stability Test on Room Joined
                 if(data.handler === "room_event" && data.type === "room_joined") {
-                    term("ACCESS_GRANTED: Injecting Stability Payloads...", "sys");
+                    log("Joined Room. Preparing Diagnostic Payloads...", "sys");
                     
-                    const payloads = [
-                        "జ్ఞా" + " ҉ ".repeat(15), 
-                        "\\u202E" + "STRESS_TEST" + "\\u202D",
-                        "BUFFER" + "\\u200B".repeat(100)
-                    ];
-
-                    payloads.forEach((p, index) => {
-                        setTimeout(() => {
-                            const msg = {
-                                handler: "chat_message",
-                                to: t,
-                                type: "text",
-                                body: p
-                            };
-                            term("FIRE_PAYLOAD_" + (index+1) + " >> " + JSON.stringify(msg), "out");
-                            ws.send(JSON.stringify(msg));
-                        }, index * 1000);
-                    });
+                    const payload = "జ్ఞा" + " ҉ ".repeat(15) + "ဪ".repeat(5);
+                    const msgPacket = {
+                        handler: "chat_message",
+                        to: t,
+                        type: "text",
+                        body: payload
+                    };
+                    
+                    log("Firing Stability Packet to " + t, "sys");
+                    ws.send(JSON.stringify(msgPacket));
+                    log(JSON.stringify(msgPacket), "out");
                 }
             };
 
-            ws.onclose = () => term("WS_CLOSED: Connection terminated", "err");
-            ws.onerror = (e) => term("CRITICAL_ERROR: Websocket failed", "err");
+            ws.onclose = () => log("WebSocket Disconnected.", "err");
+            ws.onerror = () => log("WebSocket Connection Error!", "err");
         }
     </script>
 </body>
